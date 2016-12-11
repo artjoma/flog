@@ -3,10 +3,10 @@ Simple and fast asynchronous logging.
 Two types of loggers : Console layout and file layout
 Three log levels: DEBUG, INFO, ERROR
 
-File logger
-LoggerA	-channel- FileA
-LoggerB	-channel- FileB
-LoggerN	-channel- FileN
+File logger:
+LoggerA	-channel- FileA<br/>
+LoggerB	-channel- FileB<br/>
+LoggerN	-channel- FileN<br/>
 
 
 ```go
