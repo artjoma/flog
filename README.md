@@ -1,9 +1,9 @@
 # flog
-Simple and fast asynchronous logging.
-Two types of loggers : Console layout and file layout
-Three log levels: DEBUG, INFO, ERROR
+Simple and fast asynchronous logging.<br/>
+Two types of loggers : Console layout and file layout<br/>
+Three log levels: DEBUG, INFO, ERROR<br/>
 
-File logger:
+File logger:<br/>
 LoggerA	-channel- FileA<br/>
 LoggerB	-channel- FileB<br/>
 LoggerN	-channel- FileN<br/>
