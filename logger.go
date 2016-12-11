@@ -25,17 +25,17 @@ type LogManager struct {
 	logFolder     string
 	historyFolder string
 	loggers       map[string]*Logger
-	maxFileSize   int64
-	eventChannel  chan *LoggerEvent
+	maxFileSize   uint64
 	consoleLayout bool
 }
 
 type Logger struct {
-	name       string
-	logFile    string
-	file       *os.File //open file output stream
-	fileSize   int64
-	logManager *LogManager
+	name         string
+	logFile      string
+	file         *os.File //open file output stream
+	fileSize     uint64
+	logManager   *LogManager
+	eventChannel chan *LoggerEvent
 }
 type LoggerEvent struct {
 	logger    *Logger
@@ -46,40 +46,44 @@ type LoggerEvent struct {
 	line      int    //caller line
 }
 
-func NewLogManagerFile(appFolder string, maxFileSize int64) *LogManager {
+/*
+	Create "appHome/log" and "appHome/log/history" folders at app folder.
+*/
+func NewLogManagerFile(appFolder string, maxFileSize uint64) *LogManager {
 	logFolder := filepath.Join(appFolder, "log")
 	historyFolder := filepath.Join(logFolder, "history")
 	os.MkdirAll(historyFolder, 0777)
-	logManager := &LogManager{logFolder, historyFolder, make(map[string]*Logger), maxFileSize, make(chan *LoggerEvent, 10000), false}
-	go logManager.logWriterTask()
-	return logManager
+	return &LogManager{logFolder, historyFolder, make(map[string]*Logger), maxFileSize, false}
 }
 
 func NewLogManagerConsole() *LogManager {
-	logManager := &LogManager{"", "", make(map[string]*Logger), 0, make(chan *LoggerEvent, 10000), true}
-	go logManager.logWriterTask()
-	return logManager
+	return &LogManager{"", "", make(map[string]*Logger), 0, true}
 }
 
+/*
+	Create logger. If file layout, open new file descriptor for this logger
+*/
 func (self *LogManager) NewLogger(loggerName string) *Logger {
 	if logger, ok := self.loggers[loggerName]; ok {
 		return logger
 	} else {
 		var logger *Logger
+		eventCh := make(chan *LoggerEvent, 10000)
 		if self.consoleLayout {
-			logger = &Logger{loggerName, "", nil, 0, self}
+			logger = &Logger{loggerName, "", nil, 0, self, eventCh}
 		} else {
 			logFile, file, size := logger.openFile(self.logFolder, loggerName)
-			fmt.Println("logger:", logFile, size)
-			logger = &Logger{loggerName, logFile, file, size, self}
+			fmt.Println("logger:", logFile, size, "bytes")
+			logger = &Logger{loggerName, logFile, file, size, self, eventCh}
 		}
 
+		go logger.logWriterTask()
 		self.loggers[loggerName] = logger
 		return logger
 	}
 }
 
-func (self *LogManager) logWriterTask() {
+func (self *Logger) logWriterTask() {
 	channel := self.eventChannel
 	buffer := &bytes.Buffer{}
 	var day, hour, minute, second = 0, 0, 0, 0
@@ -111,7 +115,7 @@ func (self *LogManager) logWriterTask() {
 		if event.logger.logManager.consoleLayout {
 			buffer.WriteTo(os.Stdout)
 		} else {
-			self.writeToFile(event, buffer)
+			self.logManager.writeToFile(event, buffer)
 		}
 		buffer.Reset()
 	}
@@ -122,7 +126,7 @@ func (self *LogManager) writeToFile(event *LoggerEvent, buffer *bytes.Buffer) {
 	count, err := logger.file.WriteString(buffer.String())
 	logger.file.Sync()
 	if err == nil {
-		logger.fileSize += int64(count)
+		logger.fileSize += uint64(count)
 		//rotate file
 		if logger.fileSize >= self.maxFileSize {
 			logger.file.Sync()
@@ -178,7 +182,7 @@ func (self *Logger) Debug(log string) {
 		file = "?"
 		line = 0
 	}
-	self.logManager.eventChannel <- &LoggerEvent{self, log, LEVEL_DEBUG, time.Now(), file, line}
+	self.eventChannel <- &LoggerEvent{self, log, LEVEL_DEBUG, time.Now(), file, line}
 }
 
 func (self *Logger) Info(log string) {
@@ -187,7 +191,7 @@ func (self *Logger) Info(log string) {
 		file = "?"
 		line = 0
 	}
-	self.logManager.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
+	self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
 }
 
 func (self *Logger) Err(log string) {
@@ -196,22 +200,22 @@ func (self *Logger) Err(log string) {
 		file = "?"
 		line = 0
 	}
-	self.logManager.eventChannel <- &LoggerEvent{self, log, LEVEL_ERR, time.Now(), file, line}
+	self.eventChannel <- &LoggerEvent{self, log, LEVEL_ERR, time.Now(), file, line}
 }
 
-func (self *Logger) openFile(logFolder string, loggerName string) (string, *os.File, int64) {
+func (self *Logger) openFile(logFolder string, loggerName string) (string, *os.File, uint64) {
 	logFile := filepath.Join(logFolder, loggerName+".log")
 	file, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		panic("Can't create file: " + logFile)
 	}
 	fileInfo, _ := file.Stat()
-	return logFile, file, fileInfo.Size()
+	return logFile, file, uint64(fileInfo.Size())
 }
 
 func (self *LogManager) DestroyLogManager() {
-	close(self.eventChannel)
 	for loggerName, logger := range self.loggers {
+		close(logger.eventChannel)
 		fmt.Println("start close logger: " + loggerName)
 		logger.file.Close()
 		fmt.Println("end close")
