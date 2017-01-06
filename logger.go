@@ -176,27 +176,40 @@ func (self *Logger) copyFileToHistory(sourcePath string, fileName string, toFold
 
 }
 
+func (self *Logger) GetFileName (file string) string{
+	return file[strings.LastIndex(file, "/")+1:]
+}
+
 func (self *Logger) Debug(log string) {
 	_, file, line, ok := runtime.Caller(1)
-	if !ok {
+	if ok {
+		file = self.GetFileName(file)
+	}else{
 		file = "?"
 		line = 0
 	}
+
 	self.eventChannel <- &LoggerEvent{self, log, LEVEL_DEBUG, time.Now(), file, line}
 }
 
 func (self *Logger) Info(log string) {
 	_, file, line, ok := runtime.Caller(1)
-	if !ok {
+	if ok {
+		file = self.GetFileName(file)
+	}else{
 		file = "?"
 		line = 0
 	}
+
+
 	self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
 }
 
 func (self *Logger) Err(log string) {
 	_, file, line, ok := runtime.Caller(1)
-	if !ok {
+	if ok {
+		file = self.GetFileName(file)
+	}else{
 		file = "?"
 		line = 0
 	}
