@@ -18,6 +18,8 @@ const (
 	LEVEL_DEBUG rune = 'D'
 	LEVEL_INFO  rune = 'I'
 	LEVEL_ERR   rune = 'E'
+
+	NUMBERS = "0123456789"
 )
 
 type LogManager struct {
@@ -82,7 +84,6 @@ func (self *LogManager) NewLogger(loggerName string) *Logger {
 	}
 }
 
-const NUMBERS = "0123456789"
 func firstZero(i, n int, buf []byte) {
 	buf[i+1] = NUMBERS[n%10]
 	n /= 10
