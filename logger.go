@@ -4,15 +4,14 @@ package flog
 	ArtjomA
 */
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
+	"strconv"
 )
 
 const (
@@ -83,47 +82,69 @@ func (self *LogManager) NewLogger(loggerName string) *Logger {
 	}
 }
 
+const NUMBERS = "0123456789"
+func firstZero(i, n int, buf []byte) {
+	buf[i+1] = NUMBERS[n%10]
+	n /= 10
+	buf[i] = NUMBERS[n%10]
+}
+func fixedDigits(n, i, d int, buf []byte) {
+	j := n - 1
+	for ; j >= 0 && d > 0; j-- {
+		buf[i+j] = NUMBERS[d%10]
+		d /= 10
+	}
+	for ; j >= 0; j-- {
+		buf[i+j] = '0'
+	}
+}
 func (self *Logger) logWriterTask() {
 	channel := self.eventChannel
-	buffer := &bytes.Buffer{}
+
 	var day, hour, minute, second = 0, 0, 0, 0
 	var month time.Month = time.January
 
 	for event := range channel {
 		_, month, day = event.timestamp.Date()
 		hour, minute, second = event.timestamp.Clock()
+		sl:=strconv.FormatInt(int64(event.line),10)[:]
 
-		buffer.WriteByte(byte(event.event))
-		buffer.WriteString(strconv.Itoa(day))
-		buffer.WriteString(strconv.Itoa(int(month)))
-		buffer.WriteByte(' ')
-		buffer.WriteString(strconv.Itoa(hour))
-		buffer.WriteByte(':')
-		buffer.WriteString(strconv.Itoa(minute))
-		buffer.WriteByte(':')
-		buffer.WriteString(strconv.Itoa(second))
-		buffer.WriteByte('.')
-		buffer.WriteString(strconv.Itoa(event.timestamp.Nanosecond() / 1000))
-		buffer.WriteByte(' ')
-		buffer.WriteString(event.file)
-		buffer.WriteByte(':')
-		buffer.WriteString(strconv.Itoa(event.line))
-		buffer.WriteByte('-')
-		buffer.WriteString(event.log)
-		buffer.WriteByte('\n')
+		buf := make([]byte, 22, 22 + len(event.file) + len(event.log) + len(sl) + 3)
+		buf[0] = byte(event.event)
+		firstZero(1, day, buf)
+		firstZero(3, int(month), buf)
+		buf[5] = byte(' ')
+		firstZero(6, hour, buf)
+		buf[8] = byte(':')
+		firstZero(9, minute, buf)
+		buf[11] = byte(':')
+		firstZero(12, second, buf)
+		buf[14] = byte('.')
+		fixedDigits(6, 15, event.timestamp.Nanosecond() / 1000, buf)
+		buf[21] = byte(' ')
+		c := copy(buf[22:], event.file)
+		buf[21+c] = ':'
+		buf = append(buf, sl...)
+		buf = append(buf, '-')
+		sl = event.log[:]
+		buf = append(buf, sl...)
+		buf = append(buf, '\n')
 
 		if event.logger.logManager.consoleLayout {
-			buffer.WriteTo(os.Stdout)
+			if event.event == LEVEL_ERR{
+				os.Stderr.Write(buf)
+			} else{
+				os.Stdout.Write(buf)
+			}
 		} else {
-			self.logManager.writeToFile(event, buffer)
+			self.logManager.writeToFile(event, buf)
 		}
-		buffer.Reset()
 	}
 }
 
-func (self *LogManager) writeToFile(event *LoggerEvent, buffer *bytes.Buffer) {
+func (self *LogManager) writeToFile(event *LoggerEvent, buffer []byte) {
 	logger := event.logger
-	count, err := logger.file.WriteString(buffer.String())
+	count, err := logger.file.Write(buffer)
 	logger.file.Sync()
 	if err == nil {
 		logger.fileSize += uint64(count)
@@ -176,7 +197,7 @@ func (self *Logger) copyFileToHistory(sourcePath string, fileName string, toFold
 
 }
 
-func (self *Logger) GetFileName (file string) string{
+func (self *Logger) GetFileName(file string) string {
 	return file[strings.LastIndex(file, "/")+1:]
 }
 
@@ -184,7 +205,7 @@ func (self *Logger) Debug(log string) {
 	_, file, line, ok := runtime.Caller(1)
 	if ok {
 		file = self.GetFileName(file)
-	}else{
+	} else {
 		file = "?"
 		line = 0
 	}
@@ -196,11 +217,10 @@ func (self *Logger) Info(log string) {
 	_, file, line, ok := runtime.Caller(1)
 	if ok {
 		file = self.GetFileName(file)
-	}else{
+	} else {
 		file = "?"
 		line = 0
 	}
-
 
 	self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
 }
@@ -209,7 +229,7 @@ func (self *Logger) Err(log string) {
 	_, file, line, ok := runtime.Caller(1)
 	if ok {
 		file = self.GetFileName(file)
-	}else{
+	} else {
 		file = "?"
 		line = 0
 	}

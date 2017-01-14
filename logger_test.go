@@ -13,7 +13,7 @@ func TestConsoleLog(t *testing.T) {
 	loggerA.Info("Some text 1 !")
 	loggerB.Err("Some text 2 !")
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	logManager.DestroyLogManager()
 
 }
@@ -29,3 +29,4 @@ func TestFileLog(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	logManager.DestroyLogManager()
 }
+
