@@ -9,15 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 )
 
 const (
-	LEVEL_DEBUG rune = 'D'
-	LEVEL_INFO  rune = 'I'
-	LEVEL_ERR   rune = 'E'
+	LEVEL_DEBUG rune = 'D' //68
+	LEVEL_INFO  rune = 'I' //73
+	LEVEL_ERR   rune = 'E' //69
 
 	NUMBERS = "0123456789"
 )
@@ -37,6 +37,7 @@ type Logger struct {
 	fileSize     uint64
 	logManager   *LogManager
 	eventChannel chan *LoggerEvent
+	treshold     rune
 }
 type LoggerEvent struct {
 	logger    *Logger
@@ -64,18 +65,18 @@ func NewLogManagerConsole() *LogManager {
 /*
 	Create logger. If file layout, open new file descriptor for this logger
 */
-func (self *LogManager) NewLogger(loggerName string) *Logger {
+func (self *LogManager) NewLogger(loggerName string, treshold rune) *Logger {
 	if logger, ok := self.loggers[loggerName]; ok {
 		return logger
 	} else {
 		var logger *Logger
 		eventCh := make(chan *LoggerEvent, 10000)
 		if self.consoleLayout {
-			logger = &Logger{loggerName, "", nil, 0, self, eventCh}
+			logger = &Logger{loggerName, "", nil, 0, self, eventCh, treshold}
 		} else {
 			logFile, file, size := logger.openFile(self.logFolder, loggerName)
 			fmt.Println("logger:", logFile, size, "bytes")
-			logger = &Logger{loggerName, logFile, file, size, self, eventCh}
+			logger = &Logger{loggerName, logFile, file, size, self, eventCh, treshold}
 		}
 
 		go logger.logWriterTask()
@@ -108,9 +109,9 @@ func (self *Logger) logWriterTask() {
 	for event := range channel {
 		_, month, day = event.timestamp.Date()
 		hour, minute, second = event.timestamp.Clock()
-		sl:=strconv.FormatInt(int64(event.line),10)[:]
+		sl := strconv.FormatInt(int64(event.line), 10)[:]
 
-		buf := make([]byte, 22, 22 + len(event.file) + len(event.log) + len(sl) + 3)
+		buf := make([]byte, 22, 22+len(event.file)+len(event.log)+len(sl)+3)
 		buf[0] = byte(event.event)
 		firstZero(1, day, buf)
 		firstZero(3, int(month), buf)
@@ -121,7 +122,7 @@ func (self *Logger) logWriterTask() {
 		buf[11] = byte(':')
 		firstZero(12, second, buf)
 		buf[14] = byte('.')
-		fixedDigits(6, 15, event.timestamp.Nanosecond() / 1000, buf)
+		fixedDigits(6, 15, event.timestamp.Nanosecond()/1000, buf)
 		buf[21] = byte(' ')
 		c := copy(buf[22:], event.file)
 		buf[21+c] = ':'
@@ -132,9 +133,9 @@ func (self *Logger) logWriterTask() {
 		buf = append(buf, '\n')
 
 		if event.logger.logManager.consoleLayout {
-			if event.event == LEVEL_ERR{
+			if event.event == LEVEL_ERR {
 				os.Stderr.Write(buf)
-			} else{
+			} else {
 				os.Stdout.Write(buf)
 			}
 		} else {
@@ -203,27 +204,31 @@ func (self *Logger) GetFileName(file string) string {
 }
 
 func (self *Logger) Debug(log string) {
-	_, file, line, ok := runtime.Caller(1)
-	if ok {
-		file = self.GetFileName(file)
-	} else {
-		file = "?"
-		line = 0
-	}
+	if self.treshold ==  LEVEL_DEBUG {
+		_, file, line, ok := runtime.Caller(1)
+		if ok {
+			file = self.GetFileName(file)
+		} else {
+			file = "?"
+			line = 0
+		}
 
-	self.eventChannel <- &LoggerEvent{self, log, LEVEL_DEBUG, time.Now(), file, line}
+		self.eventChannel <- &LoggerEvent{self, log, LEVEL_DEBUG, time.Now(), file, line}
+	}
 }
 
 func (self *Logger) Info(log string) {
-	_, file, line, ok := runtime.Caller(1)
-	if ok {
-		file = self.GetFileName(file)
-	} else {
-		file = "?"
-		line = 0
-	}
+	if self.treshold ==  LEVEL_DEBUG || self.treshold == LEVEL_INFO {
+		_, file, line, ok := runtime.Caller(1)
+		if ok {
+			file = self.GetFileName(file)
+		} else {
+			file = "?"
+			line = 0
+		}
 
-	self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
+		self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
+	}
 }
 
 func (self *Logger) Err(log string) {
