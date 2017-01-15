@@ -109,9 +109,9 @@ func (self *Logger) logWriterTask() {
 	for event := range channel {
 		_, month, day = event.timestamp.Date()
 		hour, minute, second = event.timestamp.Clock()
-		sl := strconv.FormatInt(int64(event.line), 10)[:]
+		lineNumberSl := strconv.FormatInt(int64(event.line), 10)
 
-		buf := make([]byte, 22, 22+len(event.file)+len(event.log)+len(sl)+3)
+		buf := make([]byte, 22, 22+len(event.file)+len(event.log)+len(lineNumberSl)+3)
 		buf[0] = byte(event.event)
 		firstZero(1, day, buf)
 		firstZero(3, int(month), buf)
@@ -124,11 +124,12 @@ func (self *Logger) logWriterTask() {
 		buf[14] = byte('.')
 		fixedDigits(6, 15, event.timestamp.Nanosecond()/1000, buf)
 		buf[21] = byte(' ')
-		c := copy(buf[22:], event.file)
-		buf[21+c] = ':'
+		sl := event.file
 		buf = append(buf, sl...)
+		buf = append(buf, ':')
+		buf = append(buf, lineNumberSl...)
 		buf = append(buf, '-')
-		sl = event.log[:]
+		sl = event.log
 		buf = append(buf, sl...)
 		buf = append(buf, '\n')
 
