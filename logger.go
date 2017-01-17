@@ -232,6 +232,20 @@ func (self *Logger) Info(log string) {
 	}
 }
 
+func (self *Logger) InfoS(params... interface{}) {
+	if self.treshold ==  LEVEL_DEBUG || self.treshold == LEVEL_INFO {
+		_, file, line, ok := runtime.Caller(1)
+		if ok {
+			file = self.GetFileName(file)
+		} else {
+			file = "?"
+			line = 0
+		}
+
+		self.eventChannel <- &LoggerEvent{self, fmt.Sprint(params...), LEVEL_INFO, time.Now(), file, line}
+	}
+}
+
 func (self *Logger) Err(log string) {
 	_, file, line, ok := runtime.Caller(1)
 	if ok {
