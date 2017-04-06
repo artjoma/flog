@@ -38,23 +38,7 @@ func TestFileLog(t *testing.T) {
 ```
 Out:
 ```go
-=== RUN   TestConsoleLog
-I1112 16:57:30.603387 /home/tjoma/dev/go_workspace/src/github.com/flog/logger_test.go:13-Some text 1 !
-E1112 16:57:30.603390 /home/tjoma/dev/go_workspace/src/github.com/flog/logger_test.go:14-Some text 2 !
-start close logger: testLoggerA
-end close
-start close logger: testLoggerB
-end close
---- PASS: TestConsoleLog (0.10s)
-=== RUN   TestFileLog
-logger: /home/tjoma/test/log/testLoggerA.log 110 bytes
-logger: /home/tjoma/test/log/testLoggerB.log 110 bytes
-start close logger: testLoggerB
-end close
-start close logger: testLoggerA
-end close
---- PASS: TestFileLog (0.10s)
-PASS
-ok  	github.com/flog	0.202s
-Success: process exited with code 0.
+I0604 13:40:03.397765 repair.go:169-Start destroy
+I0604 13:40:03.898044 repair.go:173-End destroy
+I0604 13:48:27.992297 repair.go:115-Start create services
 ```
