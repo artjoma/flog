@@ -11,6 +11,7 @@ func TestConsoleLog(t *testing.T) {
 	loggerB := logManager.NewLogger("testLoggerB", LEVEL_ERR)
 
 	loggerA.Info("Some text 1 !")
+	loggerA.InfoReqId("SOME_ID", "Some text 1 !")
 	loggerB.Err("Some text 2 !")
 	loggerB.Debug("Debug some msg")
 
@@ -30,4 +31,3 @@ func TestFileLog(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	logManager.DestroyLogManager()
 }
-
