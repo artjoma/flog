@@ -1,11 +1,10 @@
 package flog
 
 /*
-	ArtjomA
+	ArtjomAminov Fast async log
 */
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,7 +23,6 @@ const (
 
 type LogManager struct {
 	logFolder     string
-	historyFolder string
 	loggers       map[string]*Logger
 	maxFileSize   uint64
 	consoleLayout bool
@@ -53,30 +51,29 @@ type LoggerEvent struct {
 */
 func NewLogManagerFile(appFolder string, maxFileSize uint64) *LogManager {
 	logFolder := filepath.Join(appFolder, "log")
-	historyFolder := filepath.Join(logFolder, "history")
-	os.MkdirAll(historyFolder, 0777)
-	return &LogManager{logFolder, historyFolder, make(map[string]*Logger), maxFileSize, false}
+	os.Mkdir(logFolder, os.ModePerm)
+	return &LogManager{logFolder, make(map[string]*Logger), maxFileSize, false}
 }
 
 func NewLogManagerConsole() *LogManager {
-	return &LogManager{"", "", make(map[string]*Logger), 0, true}
+	return &LogManager{"", make(map[string]*Logger), 0, true}
 }
 
 /*
 	Create logger. If file layout, open new file descriptor for this logger
 */
-func (self *LogManager) NewLogger(loggerName string, treshold rune) *Logger {
+func (self *LogManager) NewLogger(loggerName string, threshold rune) *Logger {
 	if logger, ok := self.loggers[loggerName]; ok {
 		return logger
 	} else {
 		var logger *Logger
 		eventCh := make(chan *LoggerEvent, 10000)
 		if self.consoleLayout {
-			logger = &Logger{loggerName, "", nil, 0, self, eventCh, treshold}
+			logger = &Logger{loggerName, "", nil, 0, self, eventCh, threshold}
 		} else {
 			logFile, file, size := logger.openFile(self.logFolder, loggerName)
 			fmt.Println("logger:", logFile, size, "bytes")
-			logger = &Logger{loggerName, logFile, file, size, self, eventCh, treshold}
+			logger = &Logger{loggerName, logFile, file, size, self, eventCh, threshold}
 		}
 
 		go logger.logWriterTask()
@@ -105,13 +102,15 @@ func (self *Logger) logWriterTask() {
 
 	var day, hour, minute, second = 0, 0, 0, 0
 	var month time.Month = time.January
+	var lineNumberSl string
+	var buf []byte
 
 	for event := range channel {
 		_, month, day = event.timestamp.Date()
 		hour, minute, second = event.timestamp.Clock()
-		lineNumberSl := strconv.FormatInt(int64(event.line), 10)
+		lineNumberSl = strconv.FormatInt(int64(event.line), 10)
 
-		buf := make([]byte, 22, 22+len(event.file)+len(event.log)+len(lineNumberSl)+3)
+		buf = make([]byte, 22, 22+len(event.file)+len(event.log)+len(lineNumberSl)+3)
 		buf[0] = byte(event.event)
 		firstZero(1, day, buf)
 		firstZero(3, int(month), buf)
@@ -162,42 +161,10 @@ func (self *LogManager) writeToFile(event *LoggerEvent, buffer []byte) {
 			_, file, size := logger.openFile(self.logFolder, logger.name)
 			logger.file = file
 			logger.fileSize = size
-			//async copy
-			go logger.copyFileToHistory(self.logFolder, newFileName, self.historyFolder)
 		}
 	} else {
 		fmt.Println("Err write to file: "+logger.logFile, err)
 	}
-}
-
-//move temp file to history folder
-func (self *Logger) copyFileToHistory(sourcePath string, fileName string, toFolder string) {
-	srcFilePath := filepath.Join(sourcePath, fileName)
-	fromFile, err := os.Open(srcFilePath)
-	if err == nil {
-		defer func() {
-			fromFile.Close()
-			err = os.Remove(srcFilePath)
-			if err != nil {
-				fmt.Println("[Logger.go copyFileToHistory] err remove:", err, srcFilePath)
-			}
-		}()
-
-		toFile, err := os.Create(filepath.Join(toFolder, fileName))
-		if err == nil {
-			defer toFile.Close()
-			_, err = io.Copy(toFile, fromFile)
-			toFile.Sync()
-			if err != nil {
-				fmt.Println("[Logger.go copyFileToHistory] Err copy file: ", fileName)
-			}
-		} else {
-			fmt.Println("[Logger.go copyFileToHistory]Err create file: ", toFolder, fileName)
-		}
-	} else {
-		fmt.Println("[Logger.go copyFileToHistory]Err open file: ", sourcePath, fileName)
-	}
-
 }
 
 func (self *Logger) GetFileName(file string) string {
@@ -205,7 +172,7 @@ func (self *Logger) GetFileName(file string) string {
 }
 
 func (self *Logger) Debug(log string) {
-	if self.treshold ==  LEVEL_DEBUG {
+	if self.treshold == LEVEL_DEBUG {
 		_, file, line, ok := runtime.Caller(1)
 		if ok {
 			file = self.GetFileName(file)
@@ -219,7 +186,7 @@ func (self *Logger) Debug(log string) {
 }
 
 func (self *Logger) Info(log string) {
-	if self.treshold ==  LEVEL_DEBUG || self.treshold == LEVEL_INFO {
+	if self.treshold == LEVEL_DEBUG || self.treshold == LEVEL_INFO {
 		_, file, line, ok := runtime.Caller(1)
 		if ok {
 			file = self.GetFileName(file)
@@ -227,13 +194,12 @@ func (self *Logger) Info(log string) {
 			file = "?"
 			line = 0
 		}
-
 		self.eventChannel <- &LoggerEvent{self, log, LEVEL_INFO, time.Now(), file, line}
 	}
 }
 
-func (self *Logger) InfoS(params... interface{}) {
-	if self.treshold ==  LEVEL_DEBUG || self.treshold == LEVEL_INFO {
+func (self *Logger) InfoReqId(requestId string, log string){
+	if self.treshold == LEVEL_DEBUG || self.treshold == LEVEL_INFO {
 		_, file, line, ok := runtime.Caller(1)
 		if ok {
 			file = self.GetFileName(file)
@@ -241,7 +207,19 @@ func (self *Logger) InfoS(params... interface{}) {
 			file = "?"
 			line = 0
 		}
+		self.eventChannel <- &LoggerEvent{self, "[" + requestId + "] " + log, LEVEL_INFO, time.Now(), file, line}
+	}
+}
 
+func (self *Logger) InfoS(params ...interface{}) {
+	if self.treshold == LEVEL_DEBUG || self.treshold == LEVEL_INFO {
+		_, file, line, ok := runtime.Caller(1)
+		if ok {
+			file = self.GetFileName(file)
+		} else {
+			file = "?"
+			line = 0
+		}
 		self.eventChannel <- &LoggerEvent{self, fmt.Sprint(params...), LEVEL_INFO, time.Now(), file, line}
 	}
 }
@@ -255,6 +233,17 @@ func (self *Logger) Err(log string) {
 		line = 0
 	}
 	self.eventChannel <- &LoggerEvent{self, log, LEVEL_ERR, time.Now(), file, line}
+}
+
+func (self *Logger) ErrReqId(requestId string, log string){
+	_, file, line, ok := runtime.Caller(1)
+	if ok {
+		file = self.GetFileName(file)
+	} else {
+		file = "?"
+		line = 0
+	}
+	self.eventChannel <- &LoggerEvent{self, "[" + requestId + "] " + log, LEVEL_ERR, time.Now(), file, line}
 }
 
 func (self *Logger) openFile(logFolder string, loggerName string) (string, *os.File, uint64) {
