@@ -155,6 +155,7 @@ func (self *LogManager) writeToFile(event *LoggerEvent, buffer []byte) {
 			logger.file.Sync()
 			logger.file.Close()
 			nowS := strings.Replace(event.timestamp.Format(time.StampMilli), ":", "_", -1)
+			nowS = strings.ToLower(strings.Replace(nowS, " ", "_", -1))
 			newFileName := logger.name + "_" + nowS + ".log"
 			tempFileName := filepath.Join(logger.logManager.logFolder, newFileName)
 			os.Rename(logger.logFile, tempFileName)
